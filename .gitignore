@@ -49,3 +49,6 @@ Thumbs.db
 # Chrome driver
 chromedriver*
 geckodriver* 
+
+#Folders
+disabled/
