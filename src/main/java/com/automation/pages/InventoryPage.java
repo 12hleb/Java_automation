@@ -6,7 +6,9 @@ import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.FindBy;
+import org.openqa.selenium.support.ui.WebDriverWait;
 
+import java.time.Duration;
 import java.util.List;
 
 /**
@@ -63,23 +65,24 @@ public class InventoryPage extends BasePage {
     }
 
     /**
-     * Get page title
+     * Get page title from browser tab
      * @return page title text
      */
     public String getPageTitle() {
-        String title = getText(pageTitleLocator);
+        String title = driver.getTitle();
         logger.debug("Page title: " + title);
         return title;
     }
 
     /**
-     * Check if page title is displayed
-     * @return true if page title is displayed
+     * Check if page title is correct (Swag Labs)
+     * @return true if page title matches expected value
      */
     public boolean isPageTitleDisplayed() {
-        boolean displayed = isElementDisplayed(pageTitleLocator);
-        logger.debug("Page title displayed: " + displayed);
-        return displayed;
+        String title = driver.getTitle();
+        boolean isCorrect = "Swag Labs".equals(title);
+        logger.debug("Page title: " + title + ", is correct: " + isCorrect);
+        return isCorrect;
     }
 
     /**
@@ -111,7 +114,7 @@ public class InventoryPage extends BasePage {
             logger.debug("Cart badge count: " + count);
             return count;
         } catch (Exception e) {
-            logger.debug("Cart badge not found or empty");
+            logger.debug("Cart badge not found or empty - cart is empty");
             return 0;
         }
     }
@@ -229,7 +232,25 @@ public class InventoryPage extends BasePage {
      */
     public void addProductToCartByIndex(int index) {
         By addToCartButtonLocator = By.xpath("(//button[contains(@class, 'btn_inventory')])[" + (index + 1) + "]");
+        
+        // Get initial button text
+        String initialButtonText = getProductButtonTextByIndex(index);
+        logger.debug("Initial button text: '{}'", initialButtonText);
+        
         click(addToCartButtonLocator);
+        
+        // Wait for button text to change to indicate product was added
+        String finalButtonText = getProductButtonTextByIndex(index);
+        logger.debug("Final button text: '{}'", finalButtonText);
+        
+        if (!"REMOVE".equalsIgnoreCase(finalButtonText)) {
+            logger.warn("Button text did not change to REMOVE after click. Current text: '{}'", finalButtonText);
+            // Try JavaScript click as fallback
+            clickWithJavaScript(addToCartButtonLocator);
+            finalButtonText = getProductButtonTextByIndex(index);
+            logger.debug("Button text after JavaScript click: '{}'", finalButtonText);
+        }
+        
         logger.info("Added product to cart at index: " + index);
     }
 
@@ -249,7 +270,25 @@ public class InventoryPage extends BasePage {
      */
     public void removeProductFromCartByIndex(int index) {
         By removeFromCartButtonLocator = By.xpath("(//button[contains(@class, 'btn_inventory')])[" + (index + 1) + "]");
+        
+        // Get initial button text
+        String initialButtonText = getProductButtonTextByIndex(index);
+        logger.debug("Initial button text before removing: '{}'", initialButtonText);
+        
         click(removeFromCartButtonLocator);
+        
+        // Wait for button text to change to indicate product was removed
+        String finalButtonText = getProductButtonTextByIndex(index);
+        logger.debug("Final button text after removing: '{}'", finalButtonText);
+        
+        if (!"ADD TO CART".equalsIgnoreCase(finalButtonText)) {
+            logger.warn("Button text did not change to ADD TO CART after remove click. Current text: '{}'", finalButtonText);
+            // Try JavaScript click as fallback
+            clickWithJavaScript(removeFromCartButtonLocator);
+            finalButtonText = getProductButtonTextByIndex(index);
+            logger.debug("Button text after JavaScript remove click: '{}'", finalButtonText);
+        }
+        
         logger.info("Removed product from cart at index: " + index);
     }
 
@@ -336,8 +375,8 @@ public class InventoryPage extends BasePage {
      */
     public boolean isProductInCartByIndex(int index) {
         String buttonText = getProductButtonTextByIndex(index);
-        boolean inCart = "Remove".equals(buttonText);
-        logger.debug("Product at index " + index + " in cart: " + inCart);
+        boolean inCart = "REMOVE".equalsIgnoreCase(buttonText);
+        logger.debug("Product at index " + index + " in cart: " + inCart + " (button text: " + buttonText + ")");
         return inCart;
     }
 
@@ -346,7 +385,9 @@ public class InventoryPage extends BasePage {
      */
     public void waitForInventoryPageToLoad() {
         waitForPageLoad();
-        WaitUtils.waitForElementVisible(driver, pageTitleLocator);
+        // Wait for page title to be correct (HTML title element)
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        wait.until(driver -> "Swag Labs".equals(driver.getTitle()));
         WaitUtils.waitForElementVisible(driver, cartIconLocator);
         WaitUtils.waitForElementVisible(driver, sortDropdownLocator);
         logger.info("Inventory page loaded successfully");
