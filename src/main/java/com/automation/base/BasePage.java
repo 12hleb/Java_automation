@@ -141,8 +141,7 @@ public abstract class BasePage {
             logger.debug("Got text '" + text + "' from element: " + locator);
             return text;
         } catch (Exception e) {
-            logger.error("Failed to get text from element " + locator + ": " + e.getMessage());
-            takeScreenshotOnFailure("get_text_failure");
+            logger.debug("Failed to get text from element " + locator + ": " + e.getMessage());
             throw e;
         }
     }

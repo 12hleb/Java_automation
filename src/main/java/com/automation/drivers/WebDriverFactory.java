@@ -65,7 +65,8 @@ public class WebDriverFactory {
         options.addArguments("--disable-extensions");
         options.addArguments("--disable-plugins");
         options.addArguments("--disable-images");
-        
+        options.addArguments("--incognito"); // Use incognito mode to prevent password manager popups
+
         // Disable Chrome password manager and save password prompts
         options.addArguments("--disable-password-manager-reauthentication");
         options.addArguments("--disable-save-password-bubble");
