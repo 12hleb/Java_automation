@@ -45,7 +45,7 @@ public class WaitUtils {
             logger.debug("Element visible: " + locator);
             return element;
         } catch (TimeoutException e) {
-            logger.error("Element not visible within " + timeout + " seconds: " + locator);
+            logger.debug("Element not visible within " + timeout + " seconds: " + locator);
             throw e;
         }
     }
