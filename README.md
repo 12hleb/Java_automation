@@ -17,7 +17,7 @@ A professional automation testing framework built with Java, Selenium WebDriver,
 
 ## 📋 Prerequisites
 
-- Java JDK 17+
+- Java JDK 21+
 - Maven 3.6+
 - Chrome Browser (latest)
 - ChromeDriver (auto-managed)
