@@ -18,8 +18,10 @@ import org.testng.annotations.DataProvider;
         "pretty",
         "html:target/cucumber-reports/cucumber-pretty.html",
         "json:target/cucumber-reports/CucumberTestReport.json",
-        "junit:target/cucumber-reports/CucumberTestReport.xml"
+        "junit:target/cucumber-reports/CucumberTestReport.xml",
+        "timeline:target/cucumber-reports/timeline"
     },
+    tags = "@login", // Default tags, can be overridden by system property
     monochrome = true,
     dryRun = false,
     publish = false

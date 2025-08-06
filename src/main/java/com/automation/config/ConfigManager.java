@@ -42,8 +42,29 @@ public class ConfigManager {
             logger.info("Configuration properties loaded successfully");
         } catch (IOException e) {
             logger.error("Error loading configuration properties: " + e.getMessage());
-            // Set default values if config file is not found
             setDefaultProperties();
+        }
+        
+        // Override with system properties for CI
+        overrideWithSystemProperties();
+    }
+    
+    /**
+     * Override properties with system properties for CI
+     */
+    private void overrideWithSystemProperties() {
+        // Browser configuration
+        String browser = System.getProperty("browser");
+        if (browser != null) {
+            properties.setProperty("browser", browser);
+            logger.info("Browser overridden: " + browser);
+        }
+        
+        // Headless mode
+        String headless = System.getProperty("headless");
+        if (headless != null) {
+            properties.setProperty("headless", headless);
+            logger.info("Headless mode: " + headless);
         }
     }
 

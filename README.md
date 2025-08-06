@@ -76,12 +76,29 @@ src/
 - Checkout process
 - End-to-end user journeys
 
+## 🚀 CI/CD Pipeline
+
+Simple GitHub Actions pipeline that automatically runs login tests.
+
+### How it works
+- **Triggers**: Runs automatically on push to `master`/`main` branches and pull requests
+- **Environment**: Uses Ubuntu with Chrome browser in headless mode
+- **Tests**: Executes all tests with `@login` tag
+- **Reports**: Uploads test reports as artifacts
+
+### Running locally with CI settings
+```bash
+# Run login tests in headless mode (like CI)
+mvn clean test -Dtest=CucumberTestRunner -Dcucumber.filter.tags="@login" -Dheadless=true -Dbrowser=chrome
+```
+
 ## 📊 Reports & Outputs
 
 - **TestNG Reports**: `target/surefire-reports/`
 - **Cucumber Reports**: `target/cucumber-reports/`
 - **Screenshots**: `screenshots/` (failed tests)
 - **Logs**: `logs/automation.log`
+- **CI Artifacts**: Downloaded from GitHub Actions workflow runs
 
 ## 📄 License
 
