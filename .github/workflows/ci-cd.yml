@@ -1,0 +1,291 @@
+name: CI/CD Pipeline - Selenium TestNG Cucumber
+
+on:
+  push:
+    branches: [ master, develop, main ]
+  pull_request:
+    branches: [ master, develop, main ]
+  workflow_dispatch:
+    inputs:
+      test_tags:
+        description: 'Cucumber tags to run (e.g., @login,@inventory)'
+        required: false
+        default: '@login'
+      browser:
+        description: 'Browser to use for testing'
+        required: false
+        default: 'chrome'
+        type: choice
+        options:
+          - chrome
+          - firefox
+          - edge
+      environment:
+        description: 'Environment to test against'
+        required: false
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  MAVEN_OPTS: "-Xmx3072m -XX:MaxPermSize=512m"
+  JAVA_VERSION: '21'
+
+jobs:
+  build-and-test:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        browser: [chrome, firefox]
+        include:
+          - browser: chrome
+            driver_args: "--headless --no-sandbox --disable-dev-shm-usage --disable-gpu --window-size=1920,1080"
+          - browser: firefox
+            driver_args: "--headless --width=1920 --height=1080"
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Install Browser Dependencies
+      run: |
+        if [ "${{ matrix.browser }}" = "chrome" ]; then
+          sudo apt-get update
+          sudo apt-get install -y google-chrome-stable
+        elif [ "${{ matrix.browser }}" = "firefox" ]; then
+          sudo apt-get update
+          sudo apt-get install -y firefox
+        fi
+        
+    - name: Verify Java Installation
+      run: |
+        java -version
+        mvn -version
+        
+    - name: Compile Project
+      run: mvn clean compile
+      
+    - name: Run Tests
+      run: |
+        mvn clean test \
+          -Dbrowser=${{ matrix.browser }} \
+          -Dheadless=true \
+          -Dcucumber.filter.tags="${{ github.event.inputs.test_tags || '@login' }}" \
+          -Dmaven.test.failure.ignore=true
+      env:
+        BROWSER: ${{ matrix.browser }}
+        HEADLESS: true
+        TEST_ENVIRONMENT: ${{ github.event.inputs.environment || 'staging' }}
+        
+    - name: Generate Test Reports
+      if: always()
+      run: |
+        echo "Generating comprehensive test reports..."
+        if [ -d "target/surefire-reports" ]; then
+          echo "TestNG reports generated"
+        fi
+        if [ -d "target/cucumber-reports" ]; then
+          echo "Cucumber reports generated"
+        fi
+        
+    - name: Upload Screenshots on Failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: screenshots-${{ matrix.browser }}-${{ github.run_number }}
+        path: screenshots/
+        retention-days: 30
+        
+    - name: Upload Test Reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-reports-${{ matrix.browser }}-${{ github.run_number }}
+        path: |
+          target/surefire-reports/
+          target/cucumber-reports/
+          reports/
+        retention-days: 30
+        
+    - name: Upload Logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: test-logs-${{ matrix.browser }}-${{ github.run_number }}
+        path: logs/
+        retention-days: 15
+        
+    - name: Publish Test Results
+      if: always()
+      uses: dorny/test-reporter@v1
+      with:
+        name: TestNG Results (${{ matrix.browser }})
+        path: target/surefire-reports/*.xml
+        reporter: java-junit
+
+  smoke-tests:
+    name: Smoke Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Install Chrome
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Run Smoke Tests
+      run: |
+        mvn clean test \
+          -Dbrowser=chrome \
+          -Dheadless=true \
+          -Dcucumber.filter.tags="@smoke or @login" \
+          -Dmaven.test.failure.ignore=true
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Run OWASP Dependency Check
+      run: |
+        mvn org.owasp:dependency-check-maven:check \
+          -DfailBuildOnCVSS=8 \
+          -DskipTestScope=false
+          
+    - name: Upload Security Reports
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: security-reports-${{ github.run_number }}
+        path: target/dependency-check-report.html
+        retention-days: 30
+
+  performance-tests:
+    name: Performance Tests
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master' && github.event_name == 'push'
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+      
+    - name: Set up JDK ${{ env.JAVA_VERSION }}
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+        distribution: 'temurin'
+        
+    - name: Cache Maven Dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.m2
+        key: ${{ runner.os }}-m2-${{ hashFiles('**/pom.xml') }}
+        restore-keys: ${{ runner.os }}-m2
+        
+    - name: Install Chrome
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Run Performance Tests
+      run: |
+        mvn clean test \
+          -Dbrowser=chrome \
+          -Dheadless=true \
+          -Dcucumber.filter.tags="@performance" \
+          -Dmaven.test.failure.ignore=true
+
+  deploy-reports:
+    name: Deploy Reports
+    runs-on: ubuntu-latest
+    needs: [build-and-test]
+    if: always() && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/develop')
+    
+    steps:
+    - name: Download Test Reports
+      uses: actions/download-artifact@v3
+      with:
+        name: test-reports-chrome-${{ github.run_number }}
+        path: ./reports/chrome
+        
+    - name: Download Firefox Test Reports
+      uses: actions/download-artifact@v3
+      with:
+        name: test-reports-firefox-${{ github.run_number }}
+        path: ./reports/firefox
+      continue-on-error: true
+        
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/master'
+      uses: peaceiris/actions-gh-pages@v3
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./reports
+        destination_dir: test-reports/${{ github.run_number }}
+
+  notify:
+    name: Notify Results
+    runs-on: ubuntu-latest
+    needs: [build-and-test, smoke-tests]
+    if: always()
+    
+    steps:
+    - name: Notification
+      run: |
+        if [ "${{ needs.build-and-test.result }}" = "success" ] && [ "${{ needs.smoke-tests.result }}" = "success" ]; then
+          echo "✅ All tests passed successfully!"
+        else
+          echo "❌ Some tests failed. Check the reports for details."
+          exit 1
+        fi 
